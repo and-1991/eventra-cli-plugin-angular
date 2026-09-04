@@ -1,3 +1,4 @@
+import pkg from "../package.json";
 import { TEMPLATE_EVENT_CALLEE } from "./build-virtual-module";
 import { transformAngularTemplate } from "./transform";
 import type { CliPluginAngular } from "./types";
@@ -5,7 +6,7 @@ import type { CliPluginAngular } from "./types";
 export function createCliPluginAngular(): CliPluginAngular {
   return {
     id: "angular",
-    version: "1.0.0",
+    version: pkg.version,
     includeGlobs: ["**/*.html"],
     staticSinks: [
       {

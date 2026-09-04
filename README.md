@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-39%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-40%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -76,8 +76,10 @@ export class CheckoutComponent {
 ### Template - dynamic event bindings
 
 ```html
-<button [event]="computedEventName">Pay</button>
+<button [attr.event]="computedEventName">Pay</button>
 ```
+
+**Use `[attr.event]`, not `[event]`, on a plain HTML element.** `[event]="expr"` is a *property* binding - Angular's real compiler (`ng build`, with the template type checking that's on by default) checks it against the target's known properties, and a native element like `<button>` has no `event` DOM property, so this fails to build with `NG8002: Can't bind to 'event' since it isn't a known property of 'button'`. `[attr.event]="expr"` is an *attribute* binding instead - it always compiles regardless of element or component, since it goes through `setAttribute` rather than a property-existence check. `[event]="expr"` still works, and is still detected, on a **custom Angular component that actually declares `@Input() event`** - but `[attr.event]` is safe everywhere and costs nothing on a component either, so it's the form to reach for by default. The plugin parses both forms identically (Angular's own AST reports the same binding name, `event`, for `[event]` and `[attr.event]` alike - only the binding *type* differs, which the plugin doesn't need to care about), so nothing else below changes based on which one is used.
 
 The expression is copied as-is into a synthetic method appended to the component's own class, so `this` inside it really is that component instance. A **simple identifier or property chain** (`computedEventName`, `config.eventName`, `config?.eventName`, `map['key']`) is automatically qualified with `this.` - Angular template expressions never write `this` explicitly (it's a compile error in Angular's own syntax), so a bare name always means "this component's own field/getter". If it resolves to a real class property's literal initializer, the event name is detected normally; otherwise it's reported as a **dynamic occurrence** (same mechanism as `tracker.track(someVariable)` in plain TypeScript) instead of being silently dropped.
 
@@ -99,6 +101,7 @@ If `@angular/compiler` can't parse a template at all - most commonly a text node
 
 ## Known limitations
 
+- **`[event]="expr"` on a native element fails a real `ng build` (NG8002).** See "Template - dynamic event bindings" above - use `[attr.event]="expr"` instead, which the plugin detects identically.
 - **Inline templates are unsupported.** Only `templateUrl`-based (external `.html` file) components are covered - see "Finding the component class" above.
 - **The `this.`-qualification heuristic is simple-shape-only.** It recognizes a bare identifier or a chain of `.prop`/`?.prop`/`['key']` accessors - this covers both a plain class field (`EVENT_NAME = "x"`) and a **getter** (`get computedEventName() { return "x"; }`, including one with conditional `return`s, which resolves as a dynamic occurrence unioning every branch), since the host CLI's resolver checks both member kinds for `this.field`. Anything else is left as written and reported as an unresolved dynamic occurrence rather than partially rewritten - most notably **Angular Signals** (`[event]="mySignal()"`): the call syntax doesn't match the simple-shape regex, and even if it did, a signal isn't a plain function the resolver can walk into (its value lives in a separate reactive primitive, not a `return` statement) - resolving it would need dedicated Signals-aware logic this plugin doesn't have yet.
 - **The paired component class is read from disk as a second copy.** If that class already has its own real `track()`/`tracker.track()` calls in its methods (unrelated to the template), those calls get scanned twice - once via the real `.ts` file (as always), once via this plugin's virtual copy of it. The final `events` list in `eventra.json` is unaffected (it's a set, duplicates collapse), but `eventra sync`'s "Dynamic event names" console output can list the same source line twice, once under each file path.
@@ -141,11 +144,11 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**39 unit tests** (vitest), covering:
+**40 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|
-| Template parsing | Literal and dynamic `event` bindings, `*ngIf`/`*ngFor`, `@if`/`@else if`/`@else`, `@for`/`@empty`, `@switch`/`@case`/`@default`, `ng-container`/`ng-template`, empty/boolean-shorthand `event`, throws on a template the compiler can't parse (e.g. an unescaped `@if`-like text node) instead of silently reporting zero bindings |
+| Template parsing | Literal and dynamic `event` bindings, `[event]` and `[attr.event]` parsed identically, `*ngIf`/`*ngFor`, `@if`/`@else if`/`@else`, `@for`/`@empty`, `@switch`/`@case`/`@default`, `ng-container`/`ng-template`, empty/boolean-shorthand `event`, throws on a template the compiler can't parse (e.g. an unescaped `@if`-like text node) instead of silently reporting zero bindings |
 | `this.`-qualification | Bare identifier, property chain, optional chaining, element access all prefixed; method calls, operators, and literals left untouched |
 | Component-class pairing | `@Component`-decorated class found and used, undecorated-class fallback, decorated class preferred over an earlier undecorated one, no-class-in-file and missing-file fallbacks |
 | Virtual module output | Synthetic method spliced inside the real class before its closing brace, top-level-function fallback for literal-only templates and unpaired templates, export stub for an empty template |

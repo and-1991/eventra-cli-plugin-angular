@@ -19,6 +19,11 @@ describe("parseAngularTemplate", () => {
     expect(templateEvents).toEqual([{ kind: "dynamic", value: "config.eventName" }]);
   });
 
+  it("extracts [attr.event] identically to [event] - same binding name, different (irrelevant) binding type", () => {
+    const { templateEvents } = parseAngularTemplate(`<button [attr.event]="computedEventName"></button>`);
+    expect(templateEvents).toEqual([{ kind: "dynamic", value: "computedEventName" }]);
+  });
+
   it("ignores attributes/inputs not named event", () => {
     const { templateEvents } = parseAngularTemplate(`<button [disabled]="isDisabled" title="hi"></button>`);
     expect(templateEvents).toEqual([]);

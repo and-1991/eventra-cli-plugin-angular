@@ -4,6 +4,7 @@ import * as path from "path";
 
 import { describe, expect, it } from "vitest";
 
+import pkg from "../package.json";
 import { createCliPluginAngular } from "../src/index";
 import { virtualPath } from "../src/transform";
 
@@ -23,6 +24,7 @@ describe("createCliPluginAngular", () => {
     const plugin = createCliPluginAngular();
 
     expect(plugin.id).toBe("angular");
+    expect(plugin.version).toBe(pkg.version);
     expect(plugin.match("foo.component.html")).toBe(true);
     expect(plugin.match("foo.component.ts")).toBe(false);
     expect(plugin.includeGlobs).toContain("**/*.html");
