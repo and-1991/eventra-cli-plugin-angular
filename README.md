@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-37%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-39%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -91,6 +91,10 @@ The template file is paired with its component by Angular CLI's own default nami
 
 When the paired `.ts` file can't be found (or has no class at all), literal `event="..."` bindings still resolve normally - they don't need any scope - and dynamic `[event]="..."` bindings are still reported as dynamic occurrences, just never resolved to a literal.
 
+### Template parse errors
+
+If `@angular/compiler` can't parse a template at all - most commonly a text node that starts with what looks like a control-flow block opener (`@if`, `@for`, `@switch`, ...) but isn't escaped, e.g. a button labeled literally `@if control-flow event` instead of `&#64;if control-flow event` - this plugin throws instead of silently treating the file as if it had zero event bindings. The host CLI reports it as `skip: <file> Plugin "angular" failed to transform <file>: Failed to parse Angular template <file>: <compiler diagnostic>` and continues scanning every other file; only that one template is excluded from the run.
+
 ---
 
 ## Known limitations
@@ -137,11 +141,11 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**37 unit tests** (vitest), covering:
+**39 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|
-| Template parsing | Literal and dynamic `event` bindings, `*ngIf`/`*ngFor`, `@if`/`@else if`/`@else`, `@for`/`@empty`, `@switch`/`@case`/`@default`, `ng-container`/`ng-template`, empty/boolean-shorthand `event`, compiler-diagnostic reporting |
+| Template parsing | Literal and dynamic `event` bindings, `*ngIf`/`*ngFor`, `@if`/`@else if`/`@else`, `@for`/`@empty`, `@switch`/`@case`/`@default`, `ng-container`/`ng-template`, empty/boolean-shorthand `event`, throws on a template the compiler can't parse (e.g. an unescaped `@if`-like text node) instead of silently reporting zero bindings |
 | `this.`-qualification | Bare identifier, property chain, optional chaining, element access all prefixed; method calls, operators, and literals left untouched |
 | Component-class pairing | `@Component`-decorated class found and used, undecorated-class fallback, decorated class preferred over an earlier undecorated one, no-class-in-file and missing-file fallbacks |
 | Virtual module output | Synthetic method spliced inside the real class before its closing brace, top-level-function fallback for literal-only templates and unpaired templates, export stub for an empty template |

@@ -1,6 +1,6 @@
 {
   "name": "@eventra_dev/cli-plugin-angular",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Eventra CLI plugin — extract track() calls from Angular component templates",
   "license": "MIT",
   "type": "commonjs",

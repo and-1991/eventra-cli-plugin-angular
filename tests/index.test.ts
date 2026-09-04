@@ -49,6 +49,25 @@ describe("createCliPluginAngular", () => {
     expect(result.modules[0]?.content.trim()).toBe("export {}");
   });
 
+  it("throws (rather than silently returning an empty module) when a text node starting with a control-flow-like word breaks the Angular parser", async () => {
+    const plugin = createCliPluginAngular();
+
+    await expect(
+      plugin.transform({
+        path: "/project/broken.component.html",
+        source: `<button event="checkout.cta">@if control-flow event</button>`,
+      }),
+    ).rejects.toThrow(/Failed to parse Angular template .*broken\.component\.html/);
+  });
+
+  it("throws on any other template parse error too, e.g. malformed markup", async () => {
+    const plugin = createCliPluginAngular();
+
+    await expect(
+      plugin.transform({ path: "/project/malformed.component.html", source: "<div><span></div>" }),
+    ).rejects.toThrow(/Failed to parse Angular template/);
+  });
+
   it("resolves a dynamic binding through the real paired component class end-to-end", async () => {
     const project = makeProject();
     try {
