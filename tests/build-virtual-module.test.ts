@@ -55,6 +55,16 @@ describe("buildVirtualModule", () => {
     expect(content).not.toContain("class");
   });
 
+  it("quotes spaced and colon names safely", () => {
+    const bindings: TemplateEventBinding[] = [
+      { kind: "literal", value: "App: User Sign Up" },
+      { kind: "literal", value: 'Say "Hi" Now' },
+    ];
+    const content = buildVirtualModule("/project/does-not-exist.component.html", bindings);
+    expect(content).toContain('__eventra_angular_template_event__("App: User Sign Up");');
+    expect(content).toContain('__eventra_angular_template_event__("Say \\"Hi\\" Now");');
+  });
+
   it("splices a synthetic method into the paired component class for dynamic bindings", () => {
     const project = makeProject();
     try {

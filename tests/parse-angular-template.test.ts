@@ -114,3 +114,16 @@ describe("parseAngularTemplate", () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe("event names with spaces and colons", () => {
+  it("keeps the literal verbatim", () => {
+    const { templateEvents, errors } = parseAngularTemplate(
+      `<button event="App: User Sign Up">a</button><button event='Say "Hi" Now'>b</button>`,
+    );
+    expect(errors).toEqual([]);
+    expect(templateEvents).toEqual([
+      { kind: "literal", value: "App: User Sign Up" },
+      { kind: "literal", value: 'Say "Hi" Now' },
+    ]);
+  });
+});
