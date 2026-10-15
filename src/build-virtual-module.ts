@@ -44,21 +44,33 @@ function renderCall(binding: TemplateEventBinding, qualify: boolean): string {
  *   function used for the literal-only case - the dynamic bindings are
  *   still reported, just never resolved to a literal.
  */
-export function buildVirtualModule(htmlPath: string, templateEvents: readonly TemplateEventBinding[]): string {
-  if (templateEvents.length === 0) {
+export function buildVirtualModule(
+  htmlPath: string,
+  templateEvents: readonly TemplateEventBinding[],
+  templateCalls: readonly string[] = [],
+): string {
+  if (templateEvents.length === 0 && templateCalls.length === 0) {
     return "export {}\n";
   }
 
   const declaration = `declare function ${TEMPLATE_EVENT_CALLEE}(name: string): void;`;
-  const hasDynamic = templateEvents.some((binding) => binding.kind === "dynamic");
-  const scope = hasDynamic ? readComponentScope(htmlPath) : null;
+  // template calls are written against the component (`this.track(...)`), so they need its class too
+  const needsClass = templateCalls.length > 0 || templateEvents.some((binding) => binding.kind === "dynamic");
+  const scope = needsClass ? readComponentScope(htmlPath) : null;
+  // the CLI reads this line as "the code below was generated from the template"; the end line
+  // keeps the rest of the component file, which follows the method, out of that region
+  const regionStart = templateCalls.length > 0 ? [`// --- angular template (auto-generated) ---`] : [];
+  const regionEnd = templateCalls.length > 0 ? [`// --- end template ---`] : [];
 
   if (scope && scope.classEndOffset !== null) {
     const method = [
       "",
+      ...regionStart.map((line) => `  ${line}`),
       "  __eventraAngularTemplate() {",
       ...templateEvents.map((binding) => `    ${renderCall(binding, true)}`),
+      ...templateCalls.map((call) => `    ${call}`),
       "  }",
+      ...regionEnd.map((line) => `  ${line}`),
     ].join("\n");
     const spliced = scope.content.slice(0, scope.classEndOffset) + method + "\n" + scope.content.slice(scope.classEndOffset);
     return [declaration, spliced].join("\n") + "\n";
@@ -66,9 +78,12 @@ export function buildVirtualModule(htmlPath: string, templateEvents: readonly Te
 
   const lines = [
     declaration,
+    ...regionStart,
     "function __eventraAngularTemplate() {",
     ...templateEvents.map((binding) => `  ${renderCall(binding, false)}`),
+    ...templateCalls.map((call) => `  ${call}`),
     "}",
+    ...regionEnd,
   ];
   return lines.join("\n") + "\n";
 }

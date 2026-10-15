@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 
 import ts from "typescript";
 
@@ -71,4 +72,34 @@ export function readComponentScope(htmlPath: string): ComponentScope | null {
     return null;
   }
   return { content, classEndOffset: findComponentClassEnd(content, tsPath) };
+}
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * True when the `.html` file is a component's template: some `.ts` file next to it names it as a `templateUrl`.
+ * Any other `.html` (generated API docs, a static page, an email template) is not Angular markup, and a
+ * parse error in one says nothing about the project. The component usually has the same base name
+ * (`foo.component.ts`), but may not (`app.component.ts` with `templateUrl: './layout.html'`).
+ */
+export function isComponentTemplate(htmlPath: string): boolean {
+  if (/\btemplateUrl\b/.test(readComponentScope(htmlPath)?.content ?? "")) return true;
+
+  const dir = path.dirname(htmlPath);
+  const reference = new RegExp(`templateUrl\\s*:\\s*['"\`](?:\\./)?${escapeRegExp(path.basename(htmlPath))}['"\`]`);
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return false;
+  }
+  return entries
+    .filter((entry) => entry.endsWith(".ts") && !entry.endsWith(".d.ts"))
+    .some((entry) => {
+      try {
+        return reference.test(fs.readFileSync(path.join(dir, entry), "utf8"));
+      } catch {
+        return false;
+      }
+    });
 }

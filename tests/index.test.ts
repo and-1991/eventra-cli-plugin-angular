@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import pkg from "../package.json";
 import { createCliPluginAngular } from "../src/index";
+import { isComponentTemplate } from "../src/component-scope";
 import { virtualPath } from "../src/transform";
 
 function makeProject(): { root: string; cleanup: () => void } {
@@ -51,23 +52,88 @@ describe("createCliPluginAngular", () => {
     expect(result.modules[0]?.content.trim()).toBe("export {}");
   });
 
+  // a template that a component uses: its parse errors must surface, never be mistaken for "no events"
+  function componentTemplate(name: string, source: string) {
+    const project = makeProject();
+    const html = path.join(project.root, `${name}.component.html`);
+    fs.writeFileSync(html, source);
+    fs.writeFileSync(
+      path.join(project.root, `${name}.component.ts`),
+      `@Component({ selector: "x", templateUrl: "./${name}.component.html" }) export class C {}`,
+    );
+    return { ...project, html, source };
+  }
+
   it("throws (rather than silently returning an empty module) when a text node starting with a control-flow-like word breaks the Angular parser", async () => {
     const plugin = createCliPluginAngular();
-
-    await expect(
-      plugin.transform({
-        path: "/project/broken.component.html",
-        source: `<button event="checkout.cta">@if control-flow event</button>`,
-      }),
-    ).rejects.toThrow(/Failed to parse Angular template .*broken\.component\.html/);
+    const project = componentTemplate("broken", `<button event="checkout.cta">@if control-flow event</button>`);
+    try {
+      await expect(plugin.transform({ path: project.html, source: project.source })).rejects.toThrow(
+        /Failed to parse Angular template .*broken\.component\.html/,
+      );
+    } finally {
+      project.cleanup();
+    }
   });
 
   it("throws on any other template parse error too, e.g. malformed markup", async () => {
     const plugin = createCliPluginAngular();
+    const project = componentTemplate("malformed", "<div><span></div>");
+    try {
+      await expect(plugin.transform({ path: project.html, source: project.source })).rejects.toThrow(
+        /Failed to parse Angular template/,
+      );
+    } finally {
+      project.cleanup();
+    }
+  });
 
-    await expect(
-      plugin.transform({ path: "/project/malformed.component.html", source: "<div><span></div>" }),
-    ).rejects.toThrow(/Failed to parse Angular template/);
+  it("still reports an error in a template that a component with another name points at", async () => {
+    const plugin = createCliPluginAngular();
+    const project = makeProject();
+    try {
+      const html = path.join(project.root, "layout.html");
+      fs.writeFileSync(path.join(project.root, "app.component.ts"), `@Component({ templateUrl: './layout.html' }) export class App {}`);
+      await expect(plugin.transform({ path: html, source: "<div><span></div>" })).rejects.toThrow(/Failed to parse Angular template/);
+      // the same name written without ./, and a .d.ts or an unrelated .ts next to it
+      fs.writeFileSync(path.join(project.root, "app.component.ts"), `@Component({ templateUrl: "layout.html" }) export class App {}`);
+      fs.writeFileSync(path.join(project.root, "types.d.ts"), `templateUrl: 'other.html'`);
+      fs.writeFileSync(path.join(project.root, "util.ts"), `export const x = 1;`);
+      await expect(plugin.transform({ path: html, source: "<div><span></div>" })).rejects.toThrow(/Failed to parse Angular template/);
+      // a page another file's templateUrl does not name stays skipped
+      const other = await plugin.transform({ path: path.join(project.root, "docs.html"), source: "<div><span></div>" });
+      expect(other.modules[0]?.content).toBe("export {}\n");
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it("isComponentTemplate is false for a folder that cannot be read and ignores a .ts that cannot be read", () => {
+    expect(isComponentTemplate("/definitely/not/here/x.html")).toBe(false);
+    const project = makeProject();
+    try {
+      // a directory named like a TypeScript file: listed, but not readable as one
+      fs.mkdirSync(path.join(project.root, "odd.ts"));
+      expect(isComponentTemplate(path.join(project.root, "x.html"))).toBe(false);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it("skips quietly an .html file that is not a component's template, even when it does not parse", async () => {
+    const plugin = createCliPluginAngular();
+    const project = makeProject();
+    try {
+      const html = path.join(project.root, "docs.html");
+      // generated API docs: a sibling .ts exists but uses no templateUrl, and there is no sibling at all for the other
+      fs.writeFileSync(path.join(project.root, "docs.ts"), "export const x = 1;");
+      const withSibling = await plugin.transform({ path: html, source: "<div><span></div>" });
+      const noSibling = await plugin.transform({ path: path.join(project.root, "other.html"), source: "<div><span></div>" });
+      expect(withSibling.modules).toEqual([{ path: `${html}.ts`, content: "export {}\n" }]);
+      expect(noSibling.modules[0]?.content).toBe("export {}\n");
+    } finally {
+      project.cleanup();
+    }
   });
 
   it("resolves a dynamic binding through the real paired component class end-to-end", async () => {

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-45%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-71%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -87,6 +87,10 @@ A more complex expression (a method call, an operator, a pipe, a literal) is **n
 
 `event` is recognized on any tag - plain elements, components, `ng-container`, `ng-template`, `*ngIf`/`*ngFor` structural directives, and the newer `@if`/`@else if`/`@else`, `@for`/`@empty`, and `@switch`/`@case`/`@default` block syntax - since the plugin walks the whole template tree rather than special-casing specific block kinds.
 
+### Template - calls in handlers, bindings and expressions
+
+Calls in the template's own expressions are read: `(click)="track('x')"` (also several statements), `[title]="track('x')"`, `{{ track('x') }}`, `*ngIf`, `@if` / `@else if` / `@switch` / `@case`, `@for` (the iterated expression and `track`), `@let`, and `@defer` (its `when` conditions and its `@placeholder`, `@loading` and `@error` blocks). Each call with arguments is written against the component class, so `track('x')` becomes `this.track('x')`, and the call resolves to the component's own method (which may call the SDK) or to a service it holds (`svc.analytics.track('x')`). Literals, members (`a.b`, `a?.b`, `a[k]`), object and array literals, conditionals and operators in the arguments are kept; a pipe in an argument makes that argument dynamic. A call without arguments names no event and is skipped.
+
 ### Finding the component class
 
 The template file is paired with its component by Angular CLI's own default naming convention: `foo.component.html` ↔ `foo.component.ts` in the same directory (the class decorated with `@Component` is used; if none carries that exact decorator - e.g. an aliased `Component` import - the file's first class is used instead). This covers the schematic-generated layout the overwhelming majority of Angular projects use. It does **not** yet resolve a `templateUrl` that points somewhere else, and it does **not** yet support an **inline** template (`template: "..."` written directly in the `@Component` decorator, with no separate `.html` file) - both are documented gaps, not silent failures: with no template file to match against `**/*.html` in the first place, an inline template's `event`/`[event]` bindings simply aren't seen (same as before this plugin existed).
@@ -96,6 +100,8 @@ When the paired `.ts` file can't be found (or has no class at all), literal `eve
 ### Template parse errors
 
 If `@angular/compiler` can't parse a template at all - most commonly a text node that starts with what looks like a control-flow block opener (`@if`, `@for`, `@switch`, ...) but isn't escaped, e.g. a button labeled literally `@if control-flow event` instead of `&#64;if control-flow event` - this plugin throws instead of silently treating the file as if it had zero event bindings. The host CLI reports it as `skip: <file> Plugin "angular" failed to transform <file>: Failed to parse Angular template <file>: <compiler diagnostic>` and continues scanning every other file; only that one template is excluded from the run.
+
+Every `.html` file in the project is offered to this plugin, and many are not templates (generated API documentation, static pages). One that fails to parse and that no component names as its `templateUrl` (the sibling `.ts` file must mention one) is skipped without a message; the error is raised only for a real component template. A template counts as one when a `.ts` file in the same folder names it as a `templateUrl`, whatever the component is called.
 
 ---
 
@@ -144,7 +150,7 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**45 unit tests** (vitest), covering:
+**71 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|
