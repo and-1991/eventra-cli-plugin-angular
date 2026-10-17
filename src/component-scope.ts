@@ -29,7 +29,7 @@ function hasComponentDecorator(node: ts.ClassDeclaration): boolean {
  * before it - `null` when the file has no class at all.
  */
 function findComponentClassEnd(content: string, fileName: string): number | null {
-  const sourceFile = ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest, true);
+  const sourceFile = ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest);
   let decoratedClass: ts.ClassDeclaration | null = null;
   let firstClass: ts.ClassDeclaration | null = null;
 
