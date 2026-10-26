@@ -11,7 +11,7 @@ export function virtualPath(htmlPath: string): string {
 export async function transformAngularTemplate(
   input: CliPluginTransformInput,
 ): Promise<CliPluginTransformResult> {
-  const { templateEvents, templateCalls, errors } = parseAngularTemplate(input.source);
+  const { templateEvents, templateCalls, componentUsages, errors } = parseAngularTemplate(input.source);
 
   if (errors.length > 0 && !isComponentTemplate(input.path)) {
     // Every .html file is offered to this plugin, and most of those in a repository are not templates
@@ -35,7 +35,7 @@ export async function transformAngularTemplate(
     modules: [
       {
         path: virtualPath(input.path),
-        content: buildVirtualModule(input.path, templateEvents, templateCalls),
+        content: buildVirtualModule(input.path, templateEvents, templateCalls, componentUsages),
       },
     ],
   };

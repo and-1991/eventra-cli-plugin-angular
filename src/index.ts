@@ -26,8 +26,10 @@ export { transformAngularTemplate, virtualPath } from "./transform";
 export { buildVirtualModule, qualifyWithThis } from "./build-virtual-module";
 export { parseAngularTemplate } from "./parse-angular-template";
 export { readComponentScope } from "./component-scope";
+export { buildComponentMethod, findChildComponents, matchesSelector, readComponentInfo } from "./component";
+export type { ChildComponent, ComponentInfo, ComponentInput } from "./component";
 export type { ComponentScope } from "./component-scope";
-export type { ParsedAngularTemplate, TemplateEventBinding } from "./parse-angular-template";
+export type { ParsedAngularTemplate, TemplateComponentProp, TemplateComponentUsage, TemplateEventBinding } from "./parse-angular-template";
 export type {
   CliPluginAngular,
   CliPluginStaticCalleeSink,

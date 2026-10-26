@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-71%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-187%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -105,6 +105,27 @@ Every `.html` file in the project is offered to this plugin, and many are not te
 
 ---
 
+### Inputs of a component, whatever they are called
+
+The input does not have to be named `event`. If a component sends one of its inputs to a tracking call, every template that uses the component with a value for that input is an event:
+
+```ts
+@Component({ selector: 'app-button', templateUrl: './button.component.html' })
+export class ButtonComponent {
+  @Input() analyticsName!: string;
+  onClick() { this.tracker.track(this.analyticsName); }
+}
+```
+
+```html
+<app-button analyticsName="checkout.cta">Pay</app-button>
+<app-button [analyticsName]="name">Pay</app-button>
+```
+
+Read: `@Input()`, `@Input('alias')`, `@Input({ alias })`, setter inputs, `input()`, `input.required()` and `model()`; element selectors (`app-x`), `[attr]`, `tag[attr]` and comma lists; elements inside `*ngIf`, `*ngFor` and `@if` blocks; a bound expression with a pipe is an opaque value. The child is found by its `selector` among the files the template's component imports with a relative path and the `.ts` files in its own folder. An input handed on to another component is followed.
+
+Not followed: a child with an inline `template:` (the plugin only receives `.html` files), a child reached only through an NgModule in another folder, inputs declared in the `inputs: []` metadata array, directives, aliases that are not plain identifiers, class selectors and `:not()`.
+
 ## Known limitations
 
 - **`[event]="expr"` on a native element fails a real `ng build` (NG8002).** See "Template - dynamic event bindings" above - use `[attr.event]="expr"` instead, which the plugin detects identically.
@@ -150,7 +171,7 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**71 unit tests** (vitest), covering:
+**187 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|

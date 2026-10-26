@@ -27,6 +27,21 @@ export interface TemplateEventBinding {
   readonly value: string;
 }
 
+/** A prop bound on an element: `track="x"` (a literal) or `[track]="expr"` (an expression, as code inside the class). */
+export interface TemplateComponentProp {
+  readonly name: string;
+  readonly kind: "literal" | "expression";
+  readonly value: string;
+}
+
+/** An element with its props: a use of a component, when the tag or an attribute is what that component's selector picks. */
+export interface TemplateComponentUsage {
+  readonly tag: string;
+  /** Every attribute name on the element, bound or not, for attribute selectors (`[appTrack]`). */
+  readonly attributes: readonly string[];
+  readonly props: readonly TemplateComponentProp[];
+}
+
 export interface ParsedAngularTemplate {
   readonly templateEvents: readonly TemplateEventBinding[];
   /**
@@ -36,6 +51,8 @@ export interface ParsedAngularTemplate {
    * function in there is an event the component fires.
    */
   readonly templateCalls: readonly string[];
+  /** Every element that carries attributes or bindings; the ones that are components are found by their selector. */
+  readonly componentUsages: readonly TemplateComponentUsage[];
   readonly errors: readonly string[];
 }
 
@@ -46,11 +63,15 @@ interface TextAttributeLike {
 
 interface BoundAttributeLike {
   readonly name: string;
-  readonly value?: { readonly source?: string | null };
+  // 0 is a property binding (`[track]`); attribute, class and style bindings are other kinds
+  readonly type?: number;
+  readonly value?: { readonly source?: string | null; readonly ast?: AST };
 }
 
 /** Duck-typed: every node kind this walk cares about is checked structurally, not by class name - a future `@angular/compiler` version adding a new block/element kind is still picked up as long as it carries the same `attributes`/`inputs`/`children` shape. */
 interface WalkableNode {
+  // Element: its tag name
+  readonly name?: unknown;
   readonly attributes?: readonly TextAttributeLike[];
   readonly inputs?: readonly BoundAttributeLike[];
   // `(event)="handler"`
@@ -77,6 +98,22 @@ interface WalkableNode {
   readonly cases?: readonly { readonly expression?: unknown; readonly children?: readonly WalkableNode[] }[];
   // ForLoopBlock's `@empty` branch
   readonly empty?: { readonly children?: readonly WalkableNode[] } | null;
+}
+
+function collectComponentUsage(node: WalkableNode, out: TemplateComponentUsage[]): void {
+  if (typeof node.name !== "string") return;
+  const attributes = node.attributes ?? [];
+  const inputs = (node.inputs ?? []).filter((input) => input.type === 0);
+  const props: TemplateComponentProp[] = [];
+  for (const attribute of attributes) {
+    if (attribute.value !== "") props.push({ name: attribute.name, kind: "literal", value: attribute.value });
+  }
+  for (const input of inputs) {
+    // a bound attribute always carries its parsed expression; the type only says it may not
+    /* v8 ignore next */
+    if (input.value?.ast) props.push({ name: input.name, kind: "expression", value: render(input.value.ast) });
+  }
+  if (props.length > 0) out.push({ tag: node.name, attributes: [...attributes.map((attribute) => attribute.name), ...inputs.map((input) => input.name)], props });
 }
 
 function collectFromAttributes(attributes: readonly TextAttributeLike[] | undefined, out: TemplateEventBinding[]): void {
@@ -176,7 +213,8 @@ function collectCalls(expression: unknown, out: string[]): void {
   out.push(...collector.statements);
 }
 
-function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[]): void {
+function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[], usages: TemplateComponentUsage[]): void {
+  collectComponentUsage(node, usages);
   collectFromAttributes(node.attributes, out);
   collectFromInputs(node.inputs, out);
   // `(click)="..."`, `[prop]="..."`, `{{ ... }}`, `*ngIf="..."`, `@if (...)`, `@switch (...)`, `@for (... of ...)`
@@ -193,7 +231,7 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[])
   for (const templateCase of node.cases ?? []) collectCalls(templateCase.expression, calls);
 
   for (const child of node.children ?? []) {
-    visit(child, out, calls);
+    visit(child, out, calls, usages);
   }
   for (const branch of node.branches ?? []) {
     // A real IfBlock branch's `children` is always an array (`[]` for an
@@ -202,7 +240,7 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[])
     // reachable second outcome.
     /* v8 ignore next */
     for (const child of branch.children ?? []) {
-      visit(child, out, calls);
+      visit(child, out, calls, usages);
     }
   }
   for (const templateCase of node.cases ?? []) {
@@ -210,16 +248,16 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[])
     // is always an array, even for an empty `@case (1) {}` body.
     /* v8 ignore next */
     for (const child of templateCase.children ?? []) {
-      visit(child, out, calls);
+      visit(child, out, calls, usages);
     }
   }
   for (const child of node.empty?.children ?? []) {
-    visit(child, out, calls);
+    visit(child, out, calls, usages);
   }
   // `@defer { ... } @placeholder { ... } @loading { ... } @error { ... }`
   for (const block of [node.placeholder, node.loading, node.error]) {
     for (const child of block?.children ?? []) {
-      visit(child, out, calls);
+      visit(child, out, calls, usages);
     }
   }
 }
@@ -238,9 +276,10 @@ export function parseAngularTemplate(source: string): ParsedAngularTemplate {
   const errors = (result.errors ?? []).map((error) => error.msg);
   const templateEvents: TemplateEventBinding[] = [];
   const templateCalls: string[] = [];
+  const componentUsages: TemplateComponentUsage[] = [];
   for (const node of result.nodes as readonly TmplAstNode[] as readonly WalkableNode[]) {
-    visit(node, templateEvents, templateCalls);
+    visit(node, templateEvents, templateCalls, componentUsages);
   }
 
-  return { templateEvents, templateCalls, errors };
+  return { templateEvents, templateCalls, componentUsages, errors };
 }

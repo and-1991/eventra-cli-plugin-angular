@@ -24,12 +24,9 @@ function hasComponentDecorator(node: ts.ClassDeclaration): boolean {
 /**
  * Finds the class this template belongs to: the (first) class decorated with
  * `@Component`, falling back to the file's first class declaration if none
- * carries that exact decorator (e.g. an aliased `Component` import). Returns
- * the offset of its closing `}` so a synthetic method can be spliced in right
- * before it - `null` when the file has no class at all.
+ * carries that exact decorator (e.g. an aliased `Component` import).
  */
-function findComponentClassEnd(content: string, fileName: string): number | null {
-  const sourceFile = ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest);
+export function findComponentClass(sourceFile: ts.SourceFile): ts.ClassDeclaration | null {
   let decoratedClass: ts.ClassDeclaration | null = null;
   let firstClass: ts.ClassDeclaration | null = null;
 
@@ -46,7 +43,15 @@ function findComponentClassEnd(content: string, fileName: string): number | null
     }
   }
 
-  const target = decoratedClass ?? firstClass;
+  return decoratedClass ?? firstClass;
+}
+
+/**
+ * The offset of that class's closing `}` so a synthetic method can be spliced in right
+ * before it - `null` when the file has no class at all.
+ */
+function findComponentClassEnd(content: string, fileName: string): number | null {
+  const target = findComponentClass(ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest));
   return target ? target.end - 1 : null;
 }
 

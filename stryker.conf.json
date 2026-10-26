@@ -10,6 +10,7 @@
   },
   "coverageAnalysis": "perTest",
   "mutate": [
+    "src/component.ts",
     "src/parse-angular-template.ts",
     "src/component-scope.ts",
     "src/build-virtual-module.ts"
@@ -17,7 +18,8 @@
   "reporters": [
     "clear-text",
     "progress",
-    "html"
+    "html",
+    "json"
   ],
   "htmlReporter": {
     "fileName": "reports/mutation/mutation.html"
