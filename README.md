@@ -110,8 +110,12 @@ Every `.html` file in the project is offered to this plugin, and many are not te
 The input does not have to be named `event`. If a component sends one of its inputs to a tracking call, every template that uses the component with a value for that input is an event:
 
 ```ts
+import { Component, Input } from '@angular/core';
+import { Eventra } from '@eventra_dev/eventra-sdk';
+
 @Component({ selector: 'app-button', templateUrl: './button.component.html' })
 export class ButtonComponent {
+  private tracker = new Eventra({ apiKey: 'YOUR_KEY' });
   @Input() analyticsName!: string;
   onClick() { this.tracker.track(this.analyticsName); }
 }
