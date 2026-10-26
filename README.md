@@ -128,7 +128,15 @@ export class ButtonComponent {
 
 Read: `@Input()`, `@Input('alias')`, `@Input({ alias })`, setter inputs, `input()`, `input.required()` and `model()`; element selectors (`app-x`), `[attr]`, `tag[attr]` and comma lists; elements inside `*ngIf`, `*ngFor` and `@if` blocks; a bound expression with a pipe is an opaque value. The child is found by its `selector` among the files the template's component imports with a relative path and the `.ts` files in its own folder. An input handed on to another component is followed.
 
-Not followed: a child with an inline `template:` (the plugin only receives `.html` files), a child reached only through an NgModule in another folder, inputs declared in the `inputs: []` metadata array, directives, aliases that are not plain identifiers, class selectors and `:not()`.
+**Not followed** (those components are scanned as before, so nothing is lost, but an input that only they use is not found):
+
+- A child with an inline `template:` (the plugin only receives `.html` files).
+- A child reached only through an NgModule in another folder (the search covers the files the parent imports with a relative path and the `.ts` files in its own folder).
+- Inputs declared in the `inputs: []` metadata array, and aliases that are not plain identifiers.
+- Directives (`@Directive`).
+- Class selectors (`.x`) and `:not()`.
+
+A value the CLI cannot resolve to a plain string (an `*ngFor` variable, an input of the parent itself) is listed under "Dynamic event names" instead of becoming an event. The same list shows the tracking call inside the component itself, one line per component, because what it tracks is whatever each caller passes; the callers that pass a literal are still found.
 
 ## Known limitations
 
