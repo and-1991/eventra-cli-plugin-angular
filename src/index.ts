@@ -15,7 +15,9 @@ export function createCliPluginAngular(): CliPluginAngular {
         eventNameArgumentIndex: 0,
       },
     ],
-    match: (path) => path.endsWith(".html"),
+    // a .ts file is offered too, for the components whose template is written inline; it is only
+    // read if the project's own include already covers it, so this does not widen the scan
+    match: (path) => path.endsWith(".html") || (/\.[cm]?ts$/i.test(path) && !/\.d\.[cm]?ts$/i.test(path)),
     transform: transformAngularTemplate,
   };
 }
@@ -23,7 +25,7 @@ export function createCliPluginAngular(): CliPluginAngular {
 export default createCliPluginAngular();
 
 export { transformAngularTemplate, virtualPath } from "./transform";
-export { buildVirtualModule, qualifyWithThis } from "./build-virtual-module";
+export { buildInlineModule, buildVirtualModule, qualifyWithThis } from "./build-virtual-module";
 export { parseAngularTemplate } from "./parse-angular-template";
 export { readComponentScope } from "./component-scope";
 export { buildComponentMethod, findChildComponents, matchesSelector, readComponentInfo } from "./component";

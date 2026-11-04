@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-187%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-204%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -20,7 +20,7 @@ Official [**Eventra CLI**](https://www.npmjs.com/package/@eventra_dev/eventra-cl
 
 ## Overview
 
-The CLI core is framework-agnostic and only walks `.ts`/`.tsx`/`.js`/`.jsx` - it already sees an Angular component's own class body (a `.ts` file) without any plugin. What it can't see is the **template**: Angular keeps that in a separate `.html` file (`templateUrl`), which isn't TypeScript at all. This plugin teaches the CLI that file: it parses each template with the real Angular compiler ([`@angular/compiler`](https://www.npmjs.com/package/@angular/compiler)) - not a regex - and hands the CLI a virtual TypeScript module per template, so every existing detection rule (direct SDK calls, dynamic-name reporting) applies to Angular templates without any Angular-specific case in the core engine.
+The CLI core is framework-agnostic and only walks `.ts`/`.tsx`/`.js`/`.jsx` - it already sees an Angular component's own class body (a `.ts` file) without any plugin. What it can't see is the **template**: Angular keeps that in a separate `.html` file (`templateUrl`), which isn't TypeScript at all. This plugin teaches the CLI that file (and the `template: "..."` of a component that writes its template inline): it parses each template with the real Angular compiler ([`@angular/compiler`](https://www.npmjs.com/package/@angular/compiler)) - not a regex - and hands the CLI a virtual TypeScript module per template, so every existing detection rule (direct SDK calls, dynamic-name reporting) applies to Angular templates without any Angular-specific case in the core engine.
 
 ---
 
@@ -130,18 +130,18 @@ Read: `@Input()`, `@Input('alias')`, `@Input({ alias })`, setter inputs, `input(
 
 **Not followed** (those components are scanned as before, so nothing is lost, but an input that only they use is not found):
 
-- A child with an inline `template:` (the plugin only receives `.html` files).
+- An inline `template:` that has `${}` in it (a string or a backtick string without it is read).
 - A child reached only through an NgModule in another folder (the search covers the files the parent imports with a relative path and the `.ts` files in its own folder).
 - Inputs declared in the `inputs: []` metadata array, and aliases that are not plain identifiers.
 - Directives (`@Directive`).
 - Class selectors (`.x`) and `:not()`.
 
-A value the CLI cannot resolve to a plain string (an `*ngFor` variable, an input of the parent itself) is listed under "Dynamic event names" instead of becoming an event. The same list shows the tracking call inside the component itself, one line per component, because what it tracks is whatever each caller passes; the callers that pass a literal are still found.
+A value the CLI cannot resolve to a plain string (an `*ngFor` variable, an input of the parent itself) is listed under "Dynamic event names" instead of becoming an event, with the reason (`env`, `variable`, `template`, `call`, `expression`). The tracking call inside the component itself is listed apart, under "Inside a wrapper", because what it tracks is whatever each caller passes; the callers that pass a literal are still found.
 
 ## Known limitations
 
-- **`[event]="expr"` on a native element fails a real `ng build` (NG8002).** See "Template - dynamic event bindings" above - use `[attr.event]="expr"` instead, which the plugin detects identically.
-- **Inline templates are unsupported.** Only `templateUrl`-based (external `.html` file) components are covered - see "Finding the component class" above.
+- **`[event]="expr"` on a native element fails a real `ng build` (NG8002).** See "Template - dynamic event bindings" above - use `[attr.event]="expr"` instead, which the plugin detects identically. The plugin returns a note for each such tag (`notes` in the transform result), which a current CLI prints after `sync` and `check`; an older CLI ignores it.
+- **Inline templates must be plain text.** `template: "..."` and a backtick string with no `${}` are read, from the component's own `.ts` file, which the project's `sync.include` has to match (the plugin does not widen the scan). A template built with `${}` is not, and is scanned as the TypeScript it is. A template that does not parse fails the whole `.ts` file, which then appears in the list of skipped files.
 - **The `this.`-qualification heuristic is simple-shape-only.** It recognizes a bare identifier or a chain of `.prop`/`?.prop`/`['key']` accessors - this covers both a plain class field (`EVENT_NAME = "x"`) and a **getter** (`get computedEventName() { return "x"; }`, including one with conditional `return`s, which resolves as a dynamic occurrence unioning every branch), since the host CLI's resolver checks both member kinds for `this.field`. Anything else is left as written and reported as an unresolved dynamic occurrence rather than partially rewritten - most notably **Angular Signals** (`[event]="mySignal()"`): the call syntax doesn't match the simple-shape regex, and even if it did, a signal isn't a plain function the resolver can walk into (its value lives in a separate reactive primitive, not a `return` statement) - resolving it would need dedicated Signals-aware logic this plugin doesn't have yet.
 - **The paired component class is read from disk as a second copy.** If that class already has its own real `track()`/`tracker.track()` calls in its methods (unrelated to the template), those calls get scanned twice - once via the real `.ts` file (as always), once via this plugin's virtual copy of it. The final `events` list in `eventra.json` is unaffected (it's a set, duplicates collapse), but `eventra sync`'s "Dynamic event names" console output can list the same source line twice, once under each file path.
 
@@ -183,7 +183,7 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**187 unit tests** (vitest), covering:
+**204 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|

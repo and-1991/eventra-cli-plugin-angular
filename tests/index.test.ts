@@ -27,7 +27,10 @@ describe("createCliPluginAngular", () => {
     expect(plugin.id).toBe("angular");
     expect(plugin.version).toBe(pkg.version);
     expect(plugin.match("foo.component.html")).toBe(true);
-    expect(plugin.match("foo.component.ts")).toBe(false);
+    // a .ts file is offered for the components with an inline template, a declaration file is not
+    expect(plugin.match("foo.component.ts")).toBe(true);
+    expect(plugin.match("foo.d.ts")).toBe(false);
+    expect(plugin.match("foo.css")).toBe(false);
     expect(plugin.includeGlobs).toContain("**/*.html");
     expect(plugin.staticSinks?.[0]?.callee).toBe("__eventra_angular_template_event__");
     expect(plugin.staticSinks?.[0]?.eventNameArgumentIndex).toBe(0);

@@ -20,6 +20,8 @@ export interface ComponentInfo {
   readonly className: string;
   readonly selector: string | null;
   readonly templateUrl: string | null;
+  /** The text of `template: "..."` / `` template: `...` `` when it has no `${}` in it, else null. */
+  readonly inlineTemplate: string | null;
   readonly inputs: readonly ComponentInput[];
 }
 
@@ -99,6 +101,7 @@ function describeClass(node: ts.ClassDeclaration): ComponentInfo {
     className: node.name!.text,
     selector: stringValue(objectProperty(metadata, "selector")),
     templateUrl: stringValue(objectProperty(metadata, "templateUrl")),
+    inlineTemplate: stringValue(objectProperty(metadata, "template")),
     inputs: inputs.filter((input) => IDENTIFIER.test(input.local) && IDENTIFIER.test(input.publicName)),
   };
 }
@@ -231,8 +234,8 @@ function candidateFiles(tsPath: string, content: string): string[] {
 
 /**
  * The components a template may use, found among the files its own component imports and the files beside it.
- * Only a component with a `templateUrl` and at least one input counts: its template's virtual module is what
- * holds the component function a call can be resolved to.
+ * Only a component with a template (a `templateUrl`, or an inline `template`) and at least one input counts:
+ * its template's virtual module is what holds the component function a call can be resolved to.
  */
 export function findChildComponents(htmlPath: string, componentContent: string): ChildComponent[] {
   const tsPath = htmlPath.replace(/\.html$/i, ".ts");
@@ -241,8 +244,10 @@ export function findChildComponents(htmlPath: string, componentContent: string):
     const content = readIfExists(file);
     if (content === null || !content.includes("@Component")) continue;
     const info = readComponentInfo(content, file);
-    if (!info?.selector || !info.templateUrl || info.inputs.length === 0) continue;
-    children.push({ info, templatePath: path.resolve(path.dirname(file), info.templateUrl) });
+    if (!info?.selector || info.inputs.length === 0) continue;
+    // a component with an inline template keeps its component function in its own file's module
+    if (info.templateUrl) children.push({ info, templatePath: path.resolve(path.dirname(file), info.templateUrl) });
+    else if (info.inlineTemplate !== null) children.push({ info, templatePath: path.resolve(file) });
   }
   return children;
 }

@@ -1,7 +1,8 @@
 import path from "node:path";
 
 import { buildComponentMethod, COMPONENT_EXPORT, findChildComponents, matchesSelector, readComponentInfo } from "./component";
-import { readComponentScope } from "./component-scope";
+import { readComponentScope, readScopeFromSource } from "./component-scope";
+import type { ComponentScope } from "./component-scope";
 import type { TemplateComponentUsage, TemplateEventBinding } from "./parse-angular-template";
 
 export const TEMPLATE_EVENT_CALLEE = "__eventra_angular_template_event__";
@@ -57,7 +58,8 @@ function componentCalls(htmlPath: string, componentContent: string, usages: read
     if (!importName) {
       importName = `__eventraChild${importNames.size}`;
       importNames.set(child.templatePath, importName);
-      const relative = path.relative(path.dirname(htmlPath), child.templatePath).split(path.sep).join("/");
+      // a template file is imported as `./x.html` (its module is `x.html.ts`); a component file as `./x`
+      const relative = path.relative(path.dirname(htmlPath), child.templatePath).split(path.sep).join("/").replace(/\.ts$/, "");
       imports.push(`import { ${COMPONENT_EXPORT} as ${importName} } from ${JSON.stringify(relative.startsWith(".") ? relative : `./${relative}`)};`);
     }
     const body = props.map((prop) => `${prop.name}: ${prop.kind === "literal" ? JSON.stringify(prop.value) : prop.value}`);
@@ -90,16 +92,45 @@ export function buildVirtualModule(
   componentUsages: readonly TemplateComponentUsage[] = [],
 ): string {
   const tsPath = htmlPath.replace(/\.html$/i, ".ts");
-  const scope = readComponentScope(htmlPath);
+  return compose(htmlPath, tsPath, readComponentScope(htmlPath), templateEvents, templateCalls, componentUsages, false);
+}
+
+/**
+ * The module for a component whose template is written inline (`template: "..."`): the component file
+ * itself with the template's calls spliced into the class, under the file's own path, so the class keeps
+ * its lines and every call in it is read exactly once. Returns null when the template holds nothing to add.
+ */
+export function buildInlineModule(
+  tsPath: string,
+  source: string,
+  templateEvents: readonly TemplateEventBinding[],
+  templateCalls: readonly string[] = [],
+  componentUsages: readonly TemplateComponentUsage[] = [],
+): string | null {
+  const scope = readScopeFromSource(source, tsPath);
+  const content = compose(tsPath, tsPath, scope, templateEvents, templateCalls, componentUsages, true);
+  return content === source ? null : content;
+}
+
+function compose(
+  basePath: string,
+  tsPath: string,
+  scope: ComponentScope | null,
+  templateEvents: readonly TemplateEventBinding[],
+  templateCalls: readonly string[],
+  componentUsages: readonly TemplateComponentUsage[],
+  inline: boolean,
+): string {
   const hasClass = scope !== null && scope.classEndOffset !== null;
   const hasInputs = hasClass && (readComponentInfo(scope.content, tsPath)?.inputs.length ?? 0) > 0;
-  const children = hasClass ? componentCalls(htmlPath, scope.content, componentUsages) : { imports: [], calls: [] };
+  const children = hasClass ? componentCalls(basePath, scope.content, componentUsages) : { imports: [], calls: [] };
 
   if (templateEvents.length === 0 && templateCalls.length === 0 && children.calls.length === 0 && !hasInputs) {
-    return "export {}\n";
+    return inline && scope ? scope.content : "export {}\n";
   }
 
-  // one line, so the lines of the component's own code keep their place below it
+  // one line, so the lines of the component's own code keep their place below it; an inline component
+  // is the real file, so there the line goes after the code instead
   const declaration = [`declare function ${TEMPLATE_EVENT_CALLEE}(name: string): void;`, ...children.imports].join(" ");
   // template calls are written against the component (`this.track(...)`), so they need its class too
   const needsClass = templateCalls.length > 0 || children.calls.length > 0 || hasInputs || templateEvents.some((binding) => binding.kind === "dynamic");
@@ -131,17 +162,19 @@ export function buildVirtualModule(
     const closing = tail.length > 0 ? `\n${tail.join("\n")}` : "";
     const spliced = before + method + closing + "\n" + after;
     const exported = component ? `\nexport { ${component.name} as ${COMPONENT_EXPORT} };` : "";
-    return [declaration, spliced].join("\n") + exported + "\n";
+    return (inline ? [spliced.replace(/\n*$/, ""), declaration] : [declaration, spliced]).join("\n") + exported + "\n";
   }
 
   const lines = [
-    declaration,
+    ...(inline ? [] : [declaration]),
     ...regionStart,
     "function __eventraAngularTemplate() {",
     ...templateEvents.map((binding) => `  ${renderCall(binding, false)}`),
     ...templateCalls.map((call) => `  ${call}`),
     "}",
     ...regionEnd,
+    ...(inline ? [declaration] : []),
   ];
-  return lines.join("\n") + "\n";
+  // an inline component is a real file: its own code stays, the template's calls follow it
+  return (inline && scope ? `${scope.content.replace(/\n*$/, "")}\n\n` : "") + lines.join("\n") + "\n";
 }

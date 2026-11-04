@@ -45,6 +45,11 @@ export interface TemplateComponentUsage {
 export interface ParsedAngularTemplate {
   readonly templateEvents: readonly TemplateEventBinding[];
   /**
+   * Things worth telling the user that are not errors: a `[event]` binding on a native element, which
+   * Angular's own compiler rejects (NG8002) and which is read all the same.
+   */
+  readonly notes: readonly string[];
+  /**
    * Every call with arguments in the template's expressions (`(click)="track('x')"`, `{{ track('x') }}`,
    * `[title]="track('x')"`, `*ngIf`, `@if`), as a TypeScript statement that reads like the call does
    * from inside the component class: a bare name is a member (`this.track('x')`). A call to a tracking
@@ -213,10 +218,23 @@ function collectCalls(expression: unknown, out: string[]): void {
   out.push(...collector.statements);
 }
 
-function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[], usages: TemplateComponentUsage[]): void {
+// a tag with no hyphen is a native element (a component's selector has one, as Angular itself requires of custom elements)
+const isNativeTag = (name: unknown): name is string => typeof name === "string" && !name.includes("-") && !name.startsWith(":");
+
+function collectNotes(node: WalkableNode, notes: string[]): void {
+  if (!isNativeTag(node.name)) return;
+  for (const input of node.inputs ?? []) {
+    if (input.type === 0 && input.name === "event") {
+      notes.push(`[event] on <${node.name}> is a property binding that Angular rejects (NG8002) unless a directive declares an event input: write [attr.event] instead`);
+    }
+  }
+}
+
+function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[], usages: TemplateComponentUsage[], notes: string[]): void {
   collectComponentUsage(node, usages);
   collectFromAttributes(node.attributes, out);
   collectFromInputs(node.inputs, out);
+  collectNotes(node, notes);
   // `(click)="..."`, `[prop]="..."`, `{{ ... }}`, `*ngIf="..."`, `@if (...)`, `@switch (...)`, `@for (... of ...)`
   for (const output of node.outputs ?? []) collectCalls(output.handler, calls);
   for (const input of node.inputs ?? []) collectCalls(input.value, calls);
@@ -231,7 +249,7 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[],
   for (const templateCase of node.cases ?? []) collectCalls(templateCase.expression, calls);
 
   for (const child of node.children ?? []) {
-    visit(child, out, calls, usages);
+    visit(child, out, calls, usages, notes);
   }
   for (const branch of node.branches ?? []) {
     // A real IfBlock branch's `children` is always an array (`[]` for an
@@ -240,7 +258,7 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[],
     // reachable second outcome.
     /* v8 ignore next */
     for (const child of branch.children ?? []) {
-      visit(child, out, calls, usages);
+      visit(child, out, calls, usages, notes);
     }
   }
   for (const templateCase of node.cases ?? []) {
@@ -248,16 +266,16 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[],
     // is always an array, even for an empty `@case (1) {}` body.
     /* v8 ignore next */
     for (const child of templateCase.children ?? []) {
-      visit(child, out, calls, usages);
+      visit(child, out, calls, usages, notes);
     }
   }
   for (const child of node.empty?.children ?? []) {
-    visit(child, out, calls, usages);
+    visit(child, out, calls, usages, notes);
   }
   // `@defer { ... } @placeholder { ... } @loading { ... } @error { ... }`
   for (const block of [node.placeholder, node.loading, node.error]) {
     for (const child of block?.children ?? []) {
-      visit(child, out, calls, usages);
+      visit(child, out, calls, usages, notes);
     }
   }
 }
@@ -277,9 +295,10 @@ export function parseAngularTemplate(source: string): ParsedAngularTemplate {
   const templateEvents: TemplateEventBinding[] = [];
   const templateCalls: string[] = [];
   const componentUsages: TemplateComponentUsage[] = [];
+  const notes: string[] = [];
   for (const node of result.nodes as readonly TmplAstNode[] as readonly WalkableNode[]) {
-    visit(node, templateEvents, templateCalls, componentUsages);
+    visit(node, templateEvents, templateCalls, componentUsages, notes);
   }
 
-  return { templateEvents, templateCalls, componentUsages, errors };
+  return { templateEvents, templateCalls, componentUsages, notes: [...new Set(notes)], errors };
 }

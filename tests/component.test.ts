@@ -136,7 +136,7 @@ describe("matchesSelector", () => {
 });
 
 describe("findChildComponents", () => {
-  it("finds the components its imports point at, and the ones beside it, that have a template and inputs", () => {
+  it("finds the components its imports point at, and the ones beside it, that have a template (a file or an inline one) and inputs", () => {
     const { root, cleanup } = makeProject({
       "page.component.ts": `import { A } from "./a/a.component";\nimport { B } from "./b";\nimport x from "lib";`,
       "a/a.component.ts": `@Component({ selector: "app-a", templateUrl: "./a.component.html" }) export class AComponent { @Input() v!: string; }`,
@@ -144,6 +144,7 @@ describe("findChildComponents", () => {
       "side.component.ts": `@Component({ selector: "app-side", templateUrl: "./side.component.html" }) export class SideComponent { @Input() v!: string; }`,
       "noinputs.component.ts": `@Component({ selector: "app-n", templateUrl: "./n.html" }) export class NComponent {}`,
       "inline.component.ts": `@Component({ selector: "app-i", template: "x" }) export class IComponent { @Input() v!: string; }`,
+      "notemplate.component.ts": `@Component({ selector: "app-nt" }) export class NtComponent { @Input() v!: string; }`,
       "noselector.component.ts": `@Component({ templateUrl: "./n.html" }) export class NsComponent { @Input() v!: string; }`,
       "plain.ts": `export class Plain {}`,
       "types.d.ts": `@Component({ selector: "app-d", templateUrl: "./d.html" }) export class D { @Input() v!: string; }`,
@@ -152,7 +153,8 @@ describe("findChildComponents", () => {
     try {
       const page = path.join(root, "page.component.html");
       const found = findChildComponents(page, fs.readFileSync(path.join(root, "page.component.ts"), "utf8"));
-      expect(found.map((child) => child.info.selector).sort()).toEqual(["app-a", "app-b", "app-side"]);
+      expect(found.map((child) => child.info.selector).sort()).toEqual(["app-a", "app-b", "app-i", "app-side"]);
+      expect(found.find((child) => child.info.selector === "app-i")?.templatePath).toBe(path.join(root, "inline.component.ts"));
       expect(found.find((child) => child.info.selector === "app-b")?.templatePath).toBe(path.join(root, "b", "b.html"));
     } finally {
       cleanup();

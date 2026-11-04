@@ -76,6 +76,11 @@ export function readComponentScope(htmlPath: string): ComponentScope | null {
   } catch {
     return null;
   }
+  return readScopeFromSource(content, tsPath);
+}
+
+/** The scope of a component file whose source is already in hand (a component with an inline template). */
+export function readScopeFromSource(content: string, tsPath: string): ComponentScope {
   return { content, classEndOffset: findComponentClassEnd(content, tsPath) };
 }
 
