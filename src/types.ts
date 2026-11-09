@@ -25,6 +25,8 @@ export interface CliPluginTransformResult {
   readonly modules: readonly CliPluginVirtualModule[];
   /** Things to tell the user about this file that are not errors (the CLI prints them after a scan; older CLIs ignore them). */
   readonly notes?: readonly string[];
+  /** Other files the modules were built from: `eventra watch` rescans this file when one of them changes. */
+  readonly dependsOn?: readonly string[];
 }
 
 /** Contract for `@eventra_dev/cli-plugin-angular` and compatible CLI plugins. */

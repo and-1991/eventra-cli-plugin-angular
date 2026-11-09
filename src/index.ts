@@ -1,3 +1,5 @@
+// first: on a Node that cannot load the Angular compiler this fails with a clear message before anything else is required
+import "./node-version";
 import pkg from "../package.json";
 import { TEMPLATE_EVENT_CALLEE } from "./build-virtual-module";
 import { transformAngularTemplate } from "./transform";
@@ -28,7 +30,7 @@ export { transformAngularTemplate, virtualPath } from "./transform";
 export { buildInlineModule, buildVirtualModule, qualifyWithThis } from "./build-virtual-module";
 export { parseAngularTemplate } from "./parse-angular-template";
 export { readComponentScope } from "./component-scope";
-export { buildComponentMethod, findChildComponents, matchesSelector, readComponentInfo } from "./component";
+export { buildComponentMethod, findChildComponents, matchesSelector, readComponentInfo, readComponentInfos } from "./component";
 export type { ChildComponent, ComponentInfo, ComponentInput } from "./component";
 export type { ComponentScope } from "./component-scope";
 export type { ParsedAngularTemplate, TemplateComponentProp, TemplateComponentUsage, TemplateEventBinding } from "./parse-angular-template";

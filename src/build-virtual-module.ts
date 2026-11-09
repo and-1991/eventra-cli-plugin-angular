@@ -1,11 +1,12 @@
 import path from "node:path";
 
-import { buildComponentMethod, COMPONENT_EXPORT, findChildComponents, matchesSelector, readComponentInfo } from "./component";
-import { readComponentScope, readScopeFromSource } from "./component-scope";
+import { buildComponentMethod, COMPONENT_EXPORT, componentExportName, findChildComponents, locateComponent, matchesSelector, readComponentInfo } from "./component";
+import { readScopeFromSource } from "./component-scope";
 import type { ComponentScope } from "./component-scope";
 import type { TemplateComponentUsage, TemplateEventBinding } from "./parse-angular-template";
 
 export const TEMPLATE_EVENT_CALLEE = "__eventra_angular_template_event__";
+const DECLARATION = `declare function ${TEMPLATE_EVENT_CALLEE}(name: string): void;`;
 
 const SIMPLE_EXPRESSION_RE = /^[a-zA-Z_$][\w$]*(\??\.[a-zA-Z_$][\w$]*|\[[^\]\r\n]*])*$/;
 
@@ -40,27 +41,29 @@ function renderCall(binding: TemplateEventBinding, qualify: boolean): string {
  * virtual module exports the class that holds the component function (see `buildComponentMethod`). The child is
  * found by its selector, so any input name is followed, not only `event`.
  */
-function componentCalls(htmlPath: string, componentContent: string, usages: readonly TemplateComponentUsage[]): { imports: string[]; calls: string[] } {
+function componentCalls(htmlPath: string, componentContent: string, usages: readonly TemplateComponentUsage[], classIndex = 0, tsPath?: string, selfClassName?: string): { imports: string[]; calls: string[] } {
   const imports: string[] = [];
   const calls: string[] = [];
   if (usages.length === 0) return { imports, calls };
-  const children = findChildComponents(htmlPath, componentContent);
+  const children = findChildComponents(htmlPath, componentContent, tsPath, selfClassName);
   const importNames = new Map<string, string>();
   for (const usage of usages) {
     const attributes = new Set(usage.attributes);
-    const child = children.find((candidate) => candidate.templatePath !== htmlPath && matchesSelector(candidate.info.selector!, usage.tag, attributes));
+    const child = children.find((candidate) => !(candidate.templatePath === htmlPath && candidate.info.className === selfClassName) && matchesSelector(candidate.info.selector!, usage.tag, attributes));
     if (!child) continue;
     const inputs = new Set(child.info.inputs.map((input) => input.publicName));
     // an input is only followed under a name that is a plain identifier, so the props that pass the filter can be keys as they are
     const props = usage.props.filter((prop) => inputs.has(prop.name));
     if (props.length === 0) continue;
-    let importName = importNames.get(child.templatePath);
+    const importKey = `${child.templatePath}\0${child.exportName}`;
+    let importName = importNames.get(importKey);
     if (!importName) {
-      importName = `__eventraChild${importNames.size}`;
-      importNames.set(child.templatePath, importName);
+      // the second component of a file is spliced into a module that already has the first one's imports
+      importName = `__eventraChild${classIndex === 0 ? "" : `${classIndex}_`}${importNames.size}`;
+      importNames.set(importKey, importName);
       // a template file is imported as `./x.html` (its module is `x.html.ts`); a component file as `./x`
       const relative = path.relative(path.dirname(htmlPath), child.templatePath).split(path.sep).join("/").replace(/\.ts$/, "");
-      imports.push(`import { ${COMPONENT_EXPORT} as ${importName} } from ${JSON.stringify(relative.startsWith(".") ? relative : `./${relative}`)};`);
+      imports.push(`import { ${child.exportName} as ${importName} } from ${JSON.stringify(relative.startsWith(".") ? relative : `./${relative}`)};`);
     }
     const body = props.map((prop) => `${prop.name}: ${prop.kind === "literal" ? JSON.stringify(prop.value) : prop.value}`);
     calls.push(`${importName}.prototype.${child.info.className}({ ${body.join(", ")} });`);
@@ -91,8 +94,10 @@ export function buildVirtualModule(
   templateCalls: readonly string[] = [],
   componentUsages: readonly TemplateComponentUsage[] = [],
 ): string {
-  const tsPath = htmlPath.replace(/\.html$/i, ".ts");
-  return compose(htmlPath, tsPath, readComponentScope(htmlPath), templateEvents, templateCalls, componentUsages, false);
+  const located = locateComponent(htmlPath);
+  const tsPath = located?.tsPath ?? htmlPath.replace(/\.html$/i, ".ts");
+  const scope = located ? readScopeFromSource(located.content, located.tsPath, located.classIndex) : null;
+  return compose(htmlPath, tsPath, scope, templateEvents, templateCalls, componentUsages, false, located?.classIndex ?? 0);
 }
 
 /**
@@ -106,9 +111,10 @@ export function buildInlineModule(
   templateEvents: readonly TemplateEventBinding[],
   templateCalls: readonly string[] = [],
   componentUsages: readonly TemplateComponentUsage[] = [],
+  classIndex = 0,
 ): string | null {
-  const scope = readScopeFromSource(source, tsPath);
-  const content = compose(tsPath, tsPath, scope, templateEvents, templateCalls, componentUsages, true);
+  const scope = readScopeFromSource(source, tsPath, classIndex);
+  const content = compose(tsPath, tsPath, scope, templateEvents, templateCalls, componentUsages, true, classIndex);
   return content === source ? null : content;
 }
 
@@ -120,10 +126,12 @@ function compose(
   templateCalls: readonly string[],
   componentUsages: readonly TemplateComponentUsage[],
   inline: boolean,
+  classIndex = 0,
 ): string {
   const hasClass = scope !== null && scope.classEndOffset !== null;
-  const hasInputs = hasClass && (readComponentInfo(scope.content, tsPath)?.inputs.length ?? 0) > 0;
-  const children = hasClass ? componentCalls(basePath, scope.content, componentUsages) : { imports: [], calls: [] };
+  const hasInputs = hasClass && (readComponentInfo(scope.content, tsPath, classIndex)?.inputs.length ?? 0) > 0;
+  const selfClassName = hasClass ? readComponentInfo(scope.content, tsPath, classIndex)?.className : undefined;
+  const children = hasClass ? componentCalls(basePath, scope.content, componentUsages, classIndex, tsPath, selfClassName) : { imports: [], calls: [] };
 
   if (templateEvents.length === 0 && templateCalls.length === 0 && children.calls.length === 0 && !hasInputs) {
     return inline && scope ? scope.content : "export {}\n";
@@ -131,7 +139,9 @@ function compose(
 
   // one line, so the lines of the component's own code keep their place below it; an inline component
   // is the real file, so there the line goes after the code instead
-  const declaration = [`declare function ${TEMPLATE_EVENT_CALLEE}(name: string): void;`, ...children.imports].join(" ");
+  // a file already spliced for an earlier component of it carries this declaration
+  const declared = inline && scope !== null && scope.content.includes(DECLARATION);
+  const declaration = [...(declared ? [] : [DECLARATION]), ...children.imports].join(" ");
   // template calls are written against the component (`this.track(...)`), so they need its class too
   const needsClass = templateCalls.length > 0 || children.calls.length > 0 || hasInputs || templateEvents.some((binding) => binding.kind === "dynamic");
   // the CLI reads this line as "the code below was generated from the template"; the end line
@@ -157,12 +167,13 @@ function compose(
     ].join("\n");
     const before = scope.content.slice(0, scope.classEndOffset);
     const after = scope.content.slice(scope.classEndOffset);
-    const component = hasInputs ? buildComponentMethod(before + method + "\n" + after, tsPath) : null;
+    const component = hasInputs ? buildComponentMethod(before + method + "\n" + after, tsPath, classIndex) : null;
     const tail = [...(component ? ["", component.method] : []), ...regionEnd.map((line) => `  ${line}`)];
     const closing = tail.length > 0 ? `\n${tail.join("\n")}` : "";
     const spliced = before + method + closing + "\n" + after;
-    const exported = component ? `\nexport { ${component.name} as ${COMPONENT_EXPORT} };` : "";
-    return (inline ? [spliced.replace(/\n*$/, ""), declaration] : [declaration, spliced]).join("\n") + exported + "\n";
+    // a template file's module exports its component under one name, whichever class of its file it is
+    const exported = component ? `\nexport { ${component.name} as ${inline ? componentExportName(classIndex) : COMPONENT_EXPORT} };` : "";
+    return (inline ? [spliced.replace(/\n*$/, ""), declaration] : [declaration, spliced]).filter(Boolean).join("\n") + exported + "\n";
   }
 
   const lines = [
@@ -173,7 +184,7 @@ function compose(
     ...templateCalls.map((call) => `  ${call}`),
     "}",
     ...regionEnd,
-    ...(inline ? [declaration] : []),
+    ...(inline && declaration ? [declaration] : []),
   ];
   // an inline component is a real file: its own code stays, the template's calls follow it
   return (inline && scope ? `${scope.content.replace(/\n*$/, "")}\n\n` : "") + lines.join("\n") + "\n";
