@@ -291,7 +291,12 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[],
 export function parseAngularTemplate(source: string): ParsedAngularTemplate {
   const result = parseTemplate(source, "template.html", { preserveWhitespaces: false });
 
-  const errors = (result.errors ?? []).map((error) => error.msg);
+  // `span.start.line` is 0-based and counts from the start of `source`; a message that already names its
+  // position (`template.html@0:5`, expression errors) is left as it is
+  const errors = (result.errors ?? []).map((error) => {
+    const line = error.span?.start?.line;
+    return line !== undefined && !/@\d+:\d+/.test(error.msg) ? `${error.msg} (line ${line + 1})` : error.msg;
+  });
   const templateEvents: TemplateEventBinding[] = [];
   const templateCalls: string[] = [];
   const componentUsages: TemplateComponentUsage[] = [];

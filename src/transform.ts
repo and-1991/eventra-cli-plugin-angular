@@ -38,7 +38,7 @@ async function transformComponentFile(input: CliPluginTransformInput): Promise<C
     if (!info.inlineTemplate) return;
     const { templateEvents, templateCalls, componentUsages, notes: found, errors } = parseAngularTemplate(info.inlineTemplate);
     if (errors.length > 0) {
-      throw new Error(`Failed to parse the inline Angular template of ${input.path}: ${errors.join("; ")}`);
+      throw new Error(`Failed to parse the inline Angular template of ${input.path}: ${errors.map((error) => error.replace(/\(line (\d+)\)$/, "(line $1 of the template)")).join("; ")}`);
     }
     notes.push(...found);
     content = buildInlineModule(input.path, content, templateEvents, templateCalls, componentUsages, index) ?? content;

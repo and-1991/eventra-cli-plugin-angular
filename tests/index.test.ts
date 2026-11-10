@@ -91,6 +91,16 @@ describe("createCliPluginAngular", () => {
     }
   });
 
+  it("names the line of a block error", async () => {
+    const plugin = createCliPluginAngular();
+    const project = componentTemplate("lines", "<div>\n@if (a) {\n<p>x</p>\n");
+    try {
+      await expect(plugin.transform({ path: project.html, source: project.source })).rejects.toThrow(/Unclosed block "if" \(line 2\)/);
+    } finally {
+      project.cleanup();
+    }
+  });
+
   it("still reports an error in a template that a component with another name points at", async () => {
     const plugin = createCliPluginAngular();
     const project = makeProject();
