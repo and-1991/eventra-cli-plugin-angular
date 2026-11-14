@@ -291,11 +291,16 @@ function visit(node: WalkableNode, out: TemplateEventBinding[], calls: string[],
 export function parseAngularTemplate(source: string): ParsedAngularTemplate {
   const result = parseTemplate(source, "template.html", { preserveWhitespaces: false });
 
-  // `span.start.line` is 0-based and counts from the start of `source`; a message that already names its
-  // position (`template.html@0:5`, expression errors) is left as it is
+  // `span.start.line` is 0-based and counts from the start of `source`. An expression error names its
+  // place itself, as `in template.html@2:17`: a file name that does not exist and a 0-based line and
+  // column. It is rewritten to the same `(line 3, column 18)` as the rest.
   const errors = (result.errors ?? []).map((error) => {
+    const at = /\s*in template\.html@(\d+):(\d+)\s*$/.exec(error.msg);
+    if (at) return `${error.msg.slice(0, at.index)} (line ${Number(at[1]) + 1}, column ${Number(at[2]) + 1})`;
     const line = error.span?.start?.line;
-    return line !== undefined && !/@\d+:\d+/.test(error.msg) ? `${error.msg} (line ${line + 1})` : error.msg;
+    // every ParseError parseTemplate returns carries a span; the bare message is a guard only
+    /* v8 ignore next */
+    return line !== undefined ? `${error.msg} (line ${line + 1})` : error.msg;
   });
   const templateEvents: TemplateEventBinding[] = [];
   const templateCalls: string[] = [];

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-241%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-243%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>

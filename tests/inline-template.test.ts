@@ -66,6 +66,10 @@ describe("inline template: transform", () => {
     expect(await run(component(`'<i event="x"></i>'`), "/p/x.d.ts")).not.toEqual([]);
   });
 
+  it("names the line and column of an expression error within the inline template (PL6)", async () => {
+    await expect(run(component("`<div>\n<b [x]=\"a +\">t</b></div>`"))).rejects.toThrow(/\(line 2, column \d+ of the template\)/);
+  });
+
   it("fails on an inline template that does not parse, as a .html one does", async () => {
     await expect(run(component(`'<div [x]="a +">t</div>'`))).rejects.toThrow(/inline Angular template of \/p\/x\.component\.ts/);
   });

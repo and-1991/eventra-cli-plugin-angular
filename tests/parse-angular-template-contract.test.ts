@@ -28,16 +28,22 @@ describe("errors", () => {
     expect(parseAngularTemplate(`<p>{{ a }}</p>`).errors).toEqual([]);
   });
 
-  it("carries the compiler's messages, naming template.html and the position", () => {
+  it("carries the compiler's messages, with a 1-based line and column instead of template.html@0:5 (PL6)", () => {
     expect(parseAngularTemplate(`<div>{{ a | }}</div>`).errors).toEqual([
-      "Parser Error: Unexpected end of input, expected identifier or keyword at the end of the expression [ a | ] in template.html@0:5",
+      "Parser Error: Unexpected end of input, expected identifier or keyword at the end of the expression [ a | ] (line 1, column 6)",
     ]);
   });
 
   it("lists every message in order", () => {
     expect(parseAngularTemplate(`<div (click)="foo(">x</div>`).errors).toEqual([
-      "Parser Error: Unexpected end of expression: foo( at the end of the expression [foo(] in template.html@0:14",
-      "Parser Error: Missing expected ) at the end of the expression [foo(] in template.html@0:14",
+      "Parser Error: Unexpected end of expression: foo( at the end of the expression [foo(] (line 1, column 15)",
+      "Parser Error: Missing expected ) at the end of the expression [foo(] (line 1, column 15)",
+    ]);
+  });
+
+  it("gives the real line of an expression error further down the template", () => {
+    expect(parseAngularTemplate("<div>\n<p>x</p>\n<button (click)=\"track('a'\">Go</button>\n</div>").errors).toEqual([
+      "Parser Error: Missing expected ) at the end of the expression [track('a'] (line 3, column 18)",
     ]);
   });
 });
