@@ -52,6 +52,11 @@ describe("buildVirtualModule: a plain function, when the class is not needed or 
     expect(line(String.raw`a\"b`)).toBe(`  ${TEMPLATE_EVENT_CALLEE}("a\\\\\\"b");`);
   });
 
+  it("escapes a line break, so a name with one is not cut at it", () => {
+    const module = buildVirtualModule(html, [literal("multi\nline\r\tend")]);
+    expect(module.split("\n")[2]).toBe(`  ${TEMPLATE_EVENT_CALLEE}("multi\\nline\\r\\tend");`);
+  });
+
   it("emits a dynamic binding as written (no this.) when there is no class to put it in", () => {
     expect(buildVirtualModule(html, [dynamic("title")])).toBe(
       [DECL, "function __eventraAngularTemplate() {", `  ${TEMPLATE_EVENT_CALLEE}(title);`, "}", ""].join("\n"),

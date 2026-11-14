@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm version" src="https://img.shields.io/npm/v/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
   <a href="https://www.npmjs.com/package/@eventra_dev/cli-plugin-angular"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@eventra_dev/cli-plugin-angular.svg?style=flat-square&color=blue"></a>
-  <img alt="tests passing" src="https://img.shields.io/badge/tests-239%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
+  <img alt="tests passing" src="https://img.shields.io/badge/tests-241%20passing-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&logo=vitest&logoColor=white">
   <img alt="node" src="https://img.shields.io/node/v/@eventra_dev/cli-plugin-angular?style=flat-square&color=darkgreen&logo=node.js&logoColor=white">
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-ready-blue?style=flat-square&logo=typescript&logoColor=white"></a>
@@ -20,7 +20,7 @@ Official [**Eventra CLI**](https://www.npmjs.com/package/@eventra_dev/eventra-cl
 
 ## Overview
 
-The CLI core is framework-agnostic and only walks `.ts`/`.tsx`/`.js`/`.jsx` - it already sees an Angular component's own class body (a `.ts` file) without any plugin. What it can't see is the **template**: Angular keeps that in a separate `.html` file (`templateUrl`), which isn't TypeScript at all. This plugin teaches the CLI that file (and the `template: "..."` of a component that writes its template inline): it parses each template with the real Angular compiler ([`@angular/compiler`](https://www.npmjs.com/package/@angular/compiler)) - not a regex - and hands the CLI a virtual TypeScript module per template, so every existing detection rule (direct SDK calls, dynamic-name reporting) applies to Angular templates without any Angular-specific case in the core engine.
+The CLI core is framework-agnostic and only walks TypeScript and JavaScript files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`) - it already sees an Angular component's own class body (a `.ts` file) without any plugin. What it can't see is the **template**: Angular keeps that in a separate `.html` file (`templateUrl`), which isn't TypeScript at all. This plugin teaches the CLI that file (and the `template: "..."` of a component that writes its template inline): it parses each template with the real Angular compiler ([`@angular/compiler`](https://www.npmjs.com/package/@angular/compiler)) - not a regex - and hands the CLI a virtual TypeScript module per template, so every existing detection rule (direct SDK calls, dynamic-name reporting) applies to Angular templates without any Angular-specific case in the core engine.
 
 ---
 
@@ -93,13 +93,13 @@ Calls in the template's own expressions are read: `(click)="track('x')"` (also s
 
 ### Finding the component class
 
-The template file is paired with its component by Angular CLI's own default naming convention: `foo.component.html` ↔ `foo.component.ts` in the same directory (the class decorated with `@Component` is used; if none carries that exact decorator - e.g. an aliased `Component` import - the file's first class is used instead). This covers the schematic-generated layout the overwhelming majority of Angular projects use. A `.html` template whose name differs from its component file is paired only through the `.ts` file with the same base name, so `this` fields in it are not resolved; literal `event="..."` attributes in it are still read. An **inline** template (`template: "..."` in the decorator) is read from the `.ts` file itself, and a file that declares several components has each one's inline template read against its own class. A template written as a constant (`template: TEMPLATE`) is not read.
+The template file is paired with its component by Angular CLI's own default naming convention: `foo.component.html` ↔ `foo.component.ts` in the same directory (the class decorated with `@Component` is used; if none carries that exact decorator - e.g. an aliased `Component` import - the file's first class is used instead). This covers the schematic-generated layout the overwhelming majority of Angular projects use. A `.html` template whose name differs from its component file is paired with the component in the same folder whose `templateUrl` names it (see Known limitations); one that no component names falls back to the `.ts` file with the same base name, and keeps its literal `event="..."` attributes either way. An **inline** template (`template: "..."` in the decorator) is read from the `.ts` file itself, and a file that declares several components has each one's inline template read against its own class. A template written as a constant (`template: TEMPLATE`) is not read.
 
 When the paired `.ts` file can't be found (or has no class at all), literal `event="..."` bindings still resolve normally - they don't need any scope - and dynamic `[event]="..."` bindings are still reported as dynamic occurrences, just never resolved to a literal.
 
 ### Template parse errors
 
-If `@angular/compiler` can't parse a template at all - most commonly a text node that starts with what looks like a control-flow block opener (`@if`, `@for`, `@switch`, ...) but isn't escaped, e.g. a button labeled literally `@if control-flow event` instead of `&#64;if control-flow event` - this plugin throws instead of silently treating the file as if it had zero event bindings. The host CLI reports it as `skip: <file> Plugin "angular" failed to transform <file>: Failed to parse Angular template <file>: <compiler diagnostic>` and continues scanning every other file; only that one template is excluded from the run.
+If `@angular/compiler` can't parse a template at all - most commonly a text node that starts with what looks like a control-flow block opener (`@if`, `@for`, `@switch`, ...) but isn't escaped, e.g. a button labeled literally `@if control-flow event` instead of `&#64;if control-flow event` - this plugin throws instead of silently treating the file as if it had zero event bindings. The host CLI lists it in its closing summary of skipped files as `<file>: <compiler diagnostic> (line N)` (the line of the template the compiler points at, when it gives one) and continues scanning every other file; only that one template is excluded from the run, and `--strict` fails on it.
 
 Every `.html` file in the project is offered to this plugin, and many are not templates (generated API documentation, static pages). One that fails to parse and that no component names as its `templateUrl` (the sibling `.ts` file must mention one) is skipped without a message; the error is raised only for a real component template. A template counts as one when a `.ts` file in the same folder names it as a `templateUrl`, whatever the component is called.
 
@@ -148,7 +148,7 @@ A value the CLI cannot resolve to a plain string (an `*ngFor` variable, an input
 - **Dynamic names in an inline template** are shown as `template of <file>: event="..."`, with no line, because the template is not at a line of the file.
 - **`watch` and the paired component file.** `eventra watch` rescans a template when the template changes, and also when its paired `.ts` file does (the plugin tells the CLI which file the template was built from).
 - **Missing and many.** A `templateUrl` that points at no file gets a note. A file that declares many components is read slowly (50 take about 2 s, 300 about 15 s) because each component is spliced in turn; the same components in separate files take a few seconds for hundreds.
-- **Node.** The plugin needs Node 20.19+ or 22.12+ (23+ works). On an older one it stops with a message that says so, and `eventra init` leaves it out of `plugins`.
+- **Node.** The plugin needs Node 20.19+ or 22.12+; its `engines` field is `^20.19.0 || ^22.12.0 || >=24.0.0`, so Node 23 is outside the supported range (the plugin's own check does not stop it there, but npm may warn). On an older Node it stops with a message that says so, and `eventra init` leaves it out of `plugins`.
 - **The paired component class is read from disk as a second copy.** If that class already has its own real `track()`/`tracker.track()` calls in its methods (unrelated to the template), those calls get scanned twice - once via the real `.ts` file (as always), once via this plugin's virtual copy of it. The final `events` list in `eventra.json` is unaffected (it's a set, duplicates collapse), but `eventra sync`'s "Dynamic event names" console output can list the same source line twice, once under each file path.
 
 ---
@@ -170,6 +170,8 @@ export interface CliPluginAngular {
   match(path: string): boolean;
   transform(input: { path: string; source: string }): Promise<{
     modules: Array<{ path: string; content: string }>;
+    notes?: string[];      // e.g. `[event]` on a native tag, a templateUrl that points at no file
+    dependsOn?: string[];  // the paired component file, so `watch` rescans the template when it changes
   }>;
 }
 ```
@@ -189,7 +191,7 @@ No dependency on `@eventra_dev/eventra-cli` - the CLI adapts this shape internal
 
 **100% statement/branch/function/line coverage** (v8 provider, `pnpm test:coverage`), enforced via a `coverage.thresholds` block in `vitest.config.ts`.
 
-**239 unit tests** (vitest), covering:
+**240 unit tests** (vitest), covering:
 
 | Area | Covers |
 |---|---|
